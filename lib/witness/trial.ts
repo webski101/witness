@@ -11,7 +11,8 @@ import {
 } from "@/lib/kernel/witness-kernel";
 import { PURPOSE, priceForClaims } from "./constants";
 import { validateTargetUrl } from "./ssrf";
-import { getStore, type WitnessStore } from "./store";
+import { getStore } from "./store";
+import type { WitnessStorePort } from "./store-port";
 import { exportAuditEventsToSharedOS } from "./sharedos-cloud";
 import type {
   Claim,
@@ -81,8 +82,8 @@ async function httpExecution(
   if (result.status !== "succeeded") {
     return { attempt, method, durationMs, error: result.error.message };
   }
-  const output = result.output as { status: number; body: unknown };
-  return { attempt, method, durationMs, status: output.status, body: output.body };
+  const output = result.output as { status: number; body: unknown; witnessDurationMs?: number };
+  return { attempt, method, durationMs: output.witnessDurationMs ?? durationMs, status: output.status, body: output.body };
 }
 
 async function evidenceFor(
@@ -185,12 +186,12 @@ export function unsignedPayloadFromDocket(docket: Docket): Record<string, unknow
   return unsigned;
 }
 
-export async function runTrial(request: TrialRequest, store: WitnessStore = getStore()): Promise<TrialResult> {
+export async function runTrial(request: TrialRequest, store: WitnessStorePort = getStore()): Promise<TrialResult> {
   const target = await validateTargetUrl(request.targetUrl);
   const id = docketId();
   const createdAt = new Date().toISOString();
   const grants = createDocketGrants(id, target.origin, createdAt);
-  grants.forEach((grant) => store.saveGrant(grant, id));
+  await Promise.all(grants.map((grant) => store.saveGrant(grant, id)));
   const authorityId = docketAuthorityId(grants);
   const kernel = createWitnessKernel(store);
 
@@ -263,11 +264,11 @@ export async function runTrial(request: TrialRequest, store: WitnessStore = getS
   );
   const docket: Docket = { ...unsigned, ...signature };
   await kernel.invokeResource(notary, { operationId: crypto.randomUUID(), resource: { namespace: "files", path: artifactPath(id, "docket"), owner: OWNER }, action: "replace", input: docket as unknown as JsonValue });
-  store.saveDocket(docket);
+  await store.saveDocket(docket);
 
-  const auditEvents = store.getAuditEvents(id);
+  const auditEvents = await store.getAuditEvents(id);
   const cloudAudit = await exportAuditEventsToSharedOS(auditEvents);
-  store.saveCloudAuditExport(id, cloudAudit);
+  await store.saveCloudAuditExport(id, cloudAudit);
 
   return { docket, timeline: timelineFromAudit(auditEvents) };
 }

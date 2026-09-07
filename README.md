@@ -126,7 +126,12 @@ When they are absent, Witness generates a development keypair and persists it in
 
 ## Persistence
 
-Node 24's built-in SQLite stores dockets, artifacts, grants, bounded grant usage, audit events, aggregate authority state, signatures, and development keys at `data/witness.sqlite`. WAL mode and a busy timeout support concurrent local callers. Set `WITNESS_DB_PATH` to choose another durable path.
+Witness uses one small storage port with two concrete backends:
+
+- local development and tests use Node 24's built-in SQLite at `data/witness.sqlite`; WAL mode and a busy timeout support concurrent callers, and `WITNESS_DB_PATH` can select another path.
+- Vercel uses Neon Lakebase Postgres whenever `DATABASE_URL` is present. Normal requests use Neon's pooled URL through `pg` plus Vercel's `attachDatabasePool` lifecycle integration. Drizzle owns the versioned schema in `lib/witness/db-schema.ts` and `drizzle/`; migrations use the direct `DATABASE_URL_UNPOOLED` connection.
+
+Both backends persist dockets, artifacts, grants, bounded grant usage, audit events, aggregate authority state, signatures, and development keys. The production deployment uses environment-provided Ed25519 keys instead of database-generated development keys.
 
 Cloud audit export status is stored per trace in `cloud_audit_exports` and is returned by `GET /api/v1/audit?docketId=wkt_...` under `cloud`.
 
@@ -142,6 +147,7 @@ Requires Node 24 or newer because persistence uses the built-in `node:sqlite` mo
 
 ```bash
 npm install
+npm run db:migrate # when Neon variables are present
 npm run sharedos:proof
 npm test
 npm run lint
@@ -159,12 +165,12 @@ The three deterministic local sellers are dispatched in-process by the trial eng
 
 ## Production and Arena deployment
 
-1. Provision a durable writable SQLite volume or replace the small `WitnessStore` port with the deployment's supported persistent store.
-2. supply persistent Ed25519 keys.
-3. retain Node runtime semantics for DNS resolution and the SSRF boundary.
-4. create a SharedOS Cloud project and configure its environment key as `SHAREDOS_KEY`.
-5. confirm each final deployment trial reports `cloud.status = "synced"` and appears in the Cloud decisions console.
-6. keep the embedded official kernel as the decision boundary; the current Cloud preview is the audit read side, not a remote turn executor.
-7. run the full test, lint, build, malicious URL, timeout, restart, and concurrent-caller checks.
+1. Link the Vercel project and install its Neon Marketplace integration so `DATABASE_URL` and `DATABASE_URL_UNPOOLED` are available.
+2. Run `npm run db:migrate` against the direct Neon connection before the first deployment.
+3. Supply persistent `WITNESS_PRIVATE_KEY`, `WITNESS_PUBLIC_KEY`, and `SHAREDOS_KEY` values in Vercel.
+4. Keep Vercel Fluid Compute enabled and retain the Node runtime semantics needed for DNS resolution and the SSRF boundary.
+5. Confirm each final deployment trial reports `cloud.status = "synced"` and appears in the Cloud decisions console.
+6. Keep the embedded official kernel as the decision boundary; the current SharedOS Cloud preview is the audit read side, not a remote turn executor.
+7. Run the full test, lint, build, malicious URL, timeout, restart, and concurrent-caller checks.
 
 The application needs no user accounts, scheduled work, generic chat, or human action after Arena starts.

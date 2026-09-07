@@ -7,11 +7,11 @@ if (!traceId?.startsWith("wkt_")) {
 }
 
 const store = getStore();
-const events = store.getAuditEvents(traceId);
+const events = await store.getAuditEvents(traceId);
 if (events.length === 0) throw new Error(`No audit events found for ${traceId}`);
 
 const result = await exportAuditEventsToSharedOS(events);
-store.saveCloudAuditExport(traceId, result);
+await store.saveCloudAuditExport(traceId, result);
 
 console.log(JSON.stringify({ traceId, ...result }, null, 2));
 if (result.status !== "synced") process.exitCode = 1;

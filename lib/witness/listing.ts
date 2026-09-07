@@ -39,6 +39,9 @@ export const listing = {
   agentIdentities: ADDRESSES,
   runtime: {
     local: "Official @aicoo/sharedos embedded kernel",
+    persistence: process.env.DATABASE_URL
+      ? "Neon Lakebase Postgres via pooled node-postgres on Vercel Fluid Compute"
+      : "Node SQLite for local development and isolated tests",
     cloud: process.env.SHAREDOS_KEY
       ? "Official SharedOS Cloud audit export configured; kernel decisions remain in the Witness host"
       : "SharedOS Cloud audit export is not configured",

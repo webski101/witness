@@ -10,6 +10,8 @@ import type {
 } from "@aicoo/sharedos";
 import type { Docket, StoredDocketSummary } from "./types";
 import type { CloudAuditExport } from "./sharedos-cloud";
+import { NeonWitnessStore } from "./neon-store";
+import type { WitnessStorePort } from "./store-port";
 
 function addressKey(address: { kind: string } & Record<string, unknown>): string {
   if (address.kind === "agent") return `agent:${String(address.agentId)}`;
@@ -18,7 +20,8 @@ function addressKey(address: { kind: string } & Record<string, unknown>): string
   return `group:${String(address.conversationId)}`;
 }
 
-export class WitnessStore implements GrantSource, GrantUsageStore, AuditSink {
+export class WitnessStore implements GrantSource, GrantUsageStore, AuditSink, WitnessStorePort {
+  readonly persistenceKind = "sqlite" as const;
   readonly db: DatabaseSync;
   private readonly authorityByTraceActor = new Map<string, string>();
 
@@ -174,6 +177,10 @@ export class WitnessStore implements GrantSource, GrantUsageStore, AuditSink {
     );
   }
 
+  flushAuditEvents(): void {
+    // SQLite audit writes are synchronous and already durable.
+  }
+
   getAuditEvents(traceId?: string): AuditEvent[] {
     const rows = traceId
       ? this.db.prepare("SELECT json FROM audit_events WHERE trace_id = ? ORDER BY seq").all(traceId)
@@ -274,9 +281,11 @@ export class WitnessStore implements GrantSource, GrantUsageStore, AuditSink {
   }
 }
 
-const globalStore = globalThis as typeof globalThis & { witnessStore?: WitnessStore };
+const globalStore = globalThis as typeof globalThis & { witnessStore?: WitnessStorePort };
 
-export function getStore(): WitnessStore {
-  globalStore.witnessStore ??= new WitnessStore();
+export function getStore(): WitnessStorePort {
+  globalStore.witnessStore ??= process.env.DATABASE_URL
+    ? new NeonWitnessStore(process.env.DATABASE_URL)
+    : new WitnessStore();
   return globalStore.witnessStore;
 }

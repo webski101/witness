@@ -8,7 +8,8 @@ import {
   type KeyObject,
 } from "node:crypto";
 import { canonicalize } from "./canonical";
-import { getStore, type WitnessStore } from "./store";
+import { getStore } from "./store";
+import type { WitnessStorePort } from "./store-port";
 
 export interface PublicKeyDescription {
   algorithm: "Ed25519";
@@ -35,7 +36,7 @@ function importPublic(raw: string): KeyObject {
   return createPublicKey({ key: Buffer.from(raw, "base64"), format: "der", type: "spki" });
 }
 
-function loadKeys(store: WitnessStore): KeyMaterial {
+async function loadKeys(store: WitnessStorePort): Promise<KeyMaterial> {
   const envPrivate = process.env.WITNESS_PRIVATE_KEY;
   const envPublic = process.env.WITNESS_PUBLIC_KEY;
   if (envPrivate && envPublic) {
@@ -46,14 +47,14 @@ function loadKeys(store: WitnessStore): KeyMaterial {
     };
   }
 
-  let privateDer = store.getMetadata("development_private_key");
-  let publicDer = store.getMetadata("development_public_key");
+  let privateDer = await store.getMetadata("development_private_key");
+  let publicDer = await store.getMetadata("development_public_key");
   if (!privateDer || !publicDer) {
     const pair = generateKeyPairSync("ed25519");
     privateDer = pair.privateKey.export({ format: "der", type: "pkcs8" }).toString("base64");
     publicDer = pair.publicKey.export({ format: "der", type: "spki" }).toString("base64");
-    store.setMetadata("development_private_key", privateDer);
-    store.setMetadata("development_public_key", publicDer);
+    await store.setMetadata("development_private_key", privateDer);
+    await store.setMetadata("development_public_key", publicDer);
   }
   return {
     privateKey: importPrivate(privateDer),
@@ -62,8 +63,7 @@ function loadKeys(store: WitnessStore): KeyMaterial {
   };
 }
 
-export function getPublicKeyDescription(store = getStore()): PublicKeyDescription {
-  const keys = loadKeys(store);
+function describeKeys(keys: KeyMaterial): PublicKeyDescription {
   const der = keys.publicKey.export({ format: "der", type: "spki" });
   const publicKeyId = `ed25519:${createHash("sha256").update(der).digest("hex").slice(0, 24)}`;
   return {
@@ -79,12 +79,16 @@ export function getPublicKeyDescription(store = getStore()): PublicKeyDescriptio
   };
 }
 
-export function signPayload(payload: unknown, store = getStore()) {
-  const keys = loadKeys(store);
+export async function getPublicKeyDescription(store = getStore()): Promise<PublicKeyDescription> {
+  return describeKeys(await loadKeys(store));
+}
+
+export async function signPayload(payload: unknown, store = getStore()) {
+  const keys = await loadKeys(store);
   const bytes = Buffer.from(canonicalize(payload));
   const digest = createHash("sha256").update(bytes).digest("hex");
   const signature = sign(null, bytes, keys.privateKey).toString("base64");
-  const description = getPublicKeyDescription(store);
+  const description = describeKeys(keys);
   return {
     unsignedDigest: digest,
     signatureAlgorithm: "Ed25519" as const,

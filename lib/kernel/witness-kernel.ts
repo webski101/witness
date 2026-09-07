@@ -16,7 +16,8 @@ import { ADDRESSES, MAX_NETWORK_CALLS, NAMESPACE_ID, PURPOSE } from "@/lib/witne
 import { dispatchDemoFixture, type FixtureContext } from "@/lib/witness/fixtures";
 import { fetchExternalSeller, isDemoUrl } from "@/lib/witness/ssrf";
 import { signPayload } from "@/lib/witness/signature";
-import { getStore, type WitnessStore } from "@/lib/witness/store";
+import { getStore } from "@/lib/witness/store";
+import type { WitnessStorePort } from "@/lib/witness/store-port";
 import { sha256 } from "@/lib/witness/canonical";
 import type { TimelineEvent } from "@/lib/witness/types";
 
@@ -40,7 +41,7 @@ function artifactDocket(path: string[]): string | undefined {
   return path[0] === "dockets" && path[1]?.startsWith("wkt_") ? path[1] : undefined;
 }
 
-function resourceProvider(store: WitnessStore): ResourceProvider {
+function resourceProvider(store: WitnessStorePort): ResourceProvider {
   return {
     namespace: "files",
     async invoke(operation) {
@@ -55,7 +56,7 @@ function resourceProvider(store: WitnessStore): ResourceProvider {
         };
       }
       if (operation.action === "read") {
-        const value = store.getArtifact(docketId, path);
+        const value = await store.getArtifact(docketId, path);
         if (value === undefined) {
           return {
             operationId: operation.operationId,
@@ -67,7 +68,7 @@ function resourceProvider(store: WitnessStore): ResourceProvider {
         return { operationId: operation.operationId, completedAt: new Date().toISOString(), status: "succeeded", output: value as JsonValue };
       }
       if (operation.action === "replace" || operation.action === "create") {
-        store.putArtifact(docketId, path, operation.input ?? null);
+        await store.putArtifact(docketId, path, operation.input ?? null);
         return { operationId: operation.operationId, completedAt: new Date().toISOString(), status: "succeeded", output: { stored: true } };
       }
       return {
@@ -80,7 +81,7 @@ function resourceProvider(store: WitnessStore): ResourceProvider {
   };
 }
 
-function httpTool(store: WitnessStore): ToolHandler {
+function httpTool(store: WitnessStorePort): ToolHandler {
   return {
     definition: {
       name: "http.fetch",
@@ -119,23 +120,28 @@ function httpTool(store: WitnessStore): ToolHandler {
       const headers = (call.arguments.headers ?? {}) as Record<string, string>;
       try {
         let response;
+        let witnessDurationMs: number;
         if (isDemoUrl(target)) {
           if (target.searchParams.get("mode") === "unavailable") {
             throw new Error("Demo seller is intentionally unavailable");
           }
           const statePath = ["dockets", context.traceId, "fixture-state.json"];
-          const state = (store.getArtifact(context.traceId, statePath) ?? {}) as FixtureContext;
+          const state = ((await store.getArtifact(context.traceId, statePath)) ?? {}) as FixtureContext;
+          const started = performance.now();
           response = await dispatchDemoFixture(target.pathname, method, body, headers, state);
-          store.putArtifact(context.traceId, statePath, state);
+          witnessDurationMs = Math.round((performance.now() - started) * 100) / 100;
+          await store.putArtifact(context.traceId, statePath, state);
         } else {
+          const started = performance.now();
           response = await fetchExternalSeller({ target, allowedOrigin: target.origin, method, body, headers, signal });
+          witnessDurationMs = Math.round((performance.now() - started) * 100) / 100;
         }
         return {
           callId: call.id,
           tool: call.tool,
           completedAt: new Date().toISOString(),
           status: "succeeded",
-          output: response as unknown as JsonValue,
+          output: { ...response, witnessDurationMs } as unknown as JsonValue,
         };
       } catch (error) {
         return {
@@ -150,7 +156,7 @@ function httpTool(store: WitnessStore): ToolHandler {
   };
 }
 
-function signTool(store: WitnessStore): ToolHandler {
+function signTool(store: WitnessStorePort): ToolHandler {
   return {
     definition: {
       name: "crypto.sign-docket",
@@ -172,7 +178,7 @@ function signTool(store: WitnessStore): ToolHandler {
       return { resource: { namespace: "crypto", path: ["dockets", String(call.arguments.docketId)], owner: OWNER }, action: "sign" };
     },
     async invoke(_context, call) {
-      return { callId: call.id, tool: call.tool, completedAt: new Date().toISOString(), status: "succeeded", output: signPayload(call.arguments.payload, store) as unknown as JsonValue };
+      return { callId: call.id, tool: call.tool, completedAt: new Date().toISOString(), status: "succeeded", output: await signPayload(call.arguments.payload, store) as unknown as JsonValue };
     },
   };
 }

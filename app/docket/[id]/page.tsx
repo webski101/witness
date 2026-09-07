@@ -18,9 +18,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function DocketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const store = getStore();
-  const docket = store.getDocket(id);
+  const docket = await store.getDocket(id);
   if (!docket) notFound();
-  const timeline = timelineFromAudit(store.getAuditEvents(id));
+  const timeline = timelineFromAudit(await store.getAuditEvents(id));
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-10">
       <header className="grid gap-8 border-b ink-rule pb-10 md:grid-cols-[1fr_auto]">

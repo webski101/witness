@@ -33,7 +33,7 @@ test("Witness executes fixtures, signs dockets, escalates, and persists", async 
     assert.equal(northstar.docket.verdicts.find((item) => item.claimId === "paris")?.status, "HELD");
     assert.equal(northstar.docket.verdicts.find((item) => item.claimId === "boiling")?.status, "FAILED");
 
-    const publicKey = getPublicKeyDescription(store);
+    const publicKey = await getPublicKeyDescription(store);
     assert.equal(verifyPayload(unsignedPayloadFromDocket(plainword.docket), plainword.docket.signature, publicKey.publicKey), true);
 
     const unavailable = await runTrial({ ...demoSellerInput("plainword"), productName: "Unavailable fixture", targetUrl: "http://127.0.0.1:43147/api/demo/plainword?mode=unavailable", claims: [{ id: "cap", kind: "capability", statement: "Returns hola.", expect: { outputIncludes: "hola", input: { text: "hello" } } }] }, store);

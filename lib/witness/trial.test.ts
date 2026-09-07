@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
+import type { AuditEvent } from "@aicoo/sharedos";
 import { demoSellerInput } from "./demo-input";
+import { exportAuditEventsToSharedOS } from "./sharedos-cloud";
 import { getPublicKeyDescription, verifyPayload } from "./signature";
 import { WitnessStore } from "./store";
 import { runTrial, unsignedPayloadFromDocket } from "./trial";
@@ -16,6 +18,7 @@ test("Witness executes fixtures, signs dockets, escalates, and persists", async 
     const plainword = await runTrial(demoSellerInput("plainword"), store);
     assert.equal(plainword.docket.grade, "buy");
     assert.deepEqual(plainword.docket.verdicts.map((item) => item.status), ["HELD", "HELD", "HELD"]);
+    assert.equal(store.getCloudAuditExport(plainword.docket.id)?.status, "disabled");
 
     const omni = await runTrial(demoSellerInput("omnibrain"), store);
     assert.equal(omni.docket.grade, "do-not-buy");
@@ -51,4 +54,25 @@ test("Witness executes fixtures, signs dockets, escalates, and persists", async 
     try { store.close(); } catch {}
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("SharedOS Cloud audit export uses the project key and one bounded batch", async () => {
+  let authorization = "";
+  let body = "";
+  const result = await exportAuditEventsToSharedOS(
+    [{ type: "authorization.decision", traceId: "wkt_test" } as unknown as AuditEvent],
+    {
+      key: "test-project-key",
+      fetchImpl: async (_input, init) => {
+        authorization = new Headers(init?.headers).get("authorization") ?? "";
+        body = String(init?.body);
+        return new Response(null, { status: 202 });
+      },
+    },
+  );
+
+  assert.equal(result.status, "synced");
+  assert.equal(result.eventCount, 1);
+  assert.equal(authorization, "Bearer test-project-key");
+  assert.equal(JSON.parse(body).events[0].traceId, "wkt_test");
 });

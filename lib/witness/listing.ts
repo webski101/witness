@@ -39,6 +39,8 @@ export const listing = {
   agentIdentities: ADDRESSES,
   runtime: {
     local: "Official @aicoo/sharedos embedded kernel",
-    arena: "SharedOS Cloud execution is a deployment eligibility gate and requires preview provisioning",
+    cloud: process.env.SHAREDOS_KEY
+      ? "Official SharedOS Cloud audit export configured; kernel decisions remain in the Witness host"
+      : "SharedOS Cloud audit export is not configured",
   },
 } as const;

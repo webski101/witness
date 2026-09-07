@@ -9,6 +9,7 @@ import type {
   GrantUsageStore,
 } from "@aicoo/sharedos";
 import type { Docket, StoredDocketSummary } from "./types";
+import type { CloudAuditExport } from "./sharedos-cloud";
 
 function addressKey(address: { kind: string } & Record<string, unknown>): string {
   if (address.kind === "agent") return `agent:${String(address.agentId)}`;
@@ -70,6 +71,15 @@ export class WitnessStore implements GrantSource, GrantUsageStore, AuditSink {
         json TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS audit_trace ON audit_events(trace_id, seq);
+      CREATE TABLE IF NOT EXISTS cloud_audit_exports (
+        trace_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        event_count INTEGER NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 1,
+        endpoint TEXT NOT NULL,
+        last_error TEXT,
+        updated_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS metadata (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -82,7 +92,7 @@ export class WitnessStore implements GrantSource, GrantUsageStore, AuditSink {
   }
 
   clearAll(): void {
-    this.db.exec("DELETE FROM audit_events; DELETE FROM grant_usage; DELETE FROM grants; DELETE FROM artifacts; DELETE FROM dockets;");
+    this.db.exec("DELETE FROM cloud_audit_exports; DELETE FROM audit_events; DELETE FROM grant_usage; DELETE FROM grants; DELETE FROM artifacts; DELETE FROM dockets;");
   }
 
   saveGrant(grant: CapabilityGrant, docketId?: string): void {
@@ -169,6 +179,35 @@ export class WitnessStore implements GrantSource, GrantUsageStore, AuditSink {
       ? this.db.prepare("SELECT json FROM audit_events WHERE trace_id = ? ORDER BY seq").all(traceId)
       : this.db.prepare("SELECT json FROM audit_events ORDER BY seq DESC LIMIT 500").all();
     return rows.map((row) => JSON.parse(String((row as Record<string, unknown>).json)) as AuditEvent);
+  }
+
+  saveCloudAuditExport(traceId: string, result: CloudAuditExport): void {
+    this.db.prepare(`
+      INSERT INTO cloud_audit_exports(trace_id, status, event_count, attempts, endpoint, last_error, updated_at)
+      VALUES (?, ?, ?, 1, ?, ?, ?)
+      ON CONFLICT(trace_id) DO UPDATE SET
+        status = excluded.status,
+        event_count = excluded.event_count,
+        attempts = cloud_audit_exports.attempts + 1,
+        endpoint = excluded.endpoint,
+        last_error = excluded.last_error,
+        updated_at = excluded.updated_at
+    `).run(
+      traceId,
+      result.status,
+      result.eventCount,
+      result.endpoint,
+      result.error ?? null,
+      new Date().toISOString(),
+    );
+  }
+
+  getCloudAuditExport(traceId: string): Record<string, unknown> | undefined {
+    return this.db.prepare(`
+      SELECT trace_id AS traceId, status, event_count AS eventCount, attempts,
+             endpoint, last_error AS lastError, updated_at AS updatedAt
+      FROM cloud_audit_exports WHERE trace_id = ?
+    `).get(traceId) as Record<string, unknown> | undefined;
   }
 
   putArtifact(docketId: string, path: string[], value: unknown): void {

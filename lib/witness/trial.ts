@@ -12,6 +12,7 @@ import {
 import { PURPOSE, priceForClaims } from "./constants";
 import { validateTargetUrl } from "./ssrf";
 import { getStore, type WitnessStore } from "./store";
+import { exportAuditEventsToSharedOS } from "./sharedos-cloud";
 import type {
   Claim,
   Docket,
@@ -264,5 +265,9 @@ export async function runTrial(request: TrialRequest, store: WitnessStore = getS
   await kernel.invokeResource(notary, { operationId: crypto.randomUUID(), resource: { namespace: "files", path: artifactPath(id, "docket"), owner: OWNER }, action: "replace", input: docket as unknown as JsonValue });
   store.saveDocket(docket);
 
-  return { docket, timeline: timelineFromAudit(store.getAuditEvents(id)) };
+  const auditEvents = store.getAuditEvents(id);
+  const cloudAudit = await exportAuditEventsToSharedOS(auditEvents);
+  store.saveCloudAuditExport(id, cloudAudit);
+
+  return { docket, timeline: timelineFromAudit(auditEvents) };
 }

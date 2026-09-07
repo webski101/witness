@@ -36,9 +36,9 @@ Official references: [SharedOS quickstart](https://www.sharedos.ai/docs/quicksta
 
 The open-source embedded kernel, grant decisions, bounded uses, exact-call checks, escalation records, and audit events are real SharedOS in local development.
 
-SharedOS Cloud is currently a design-partner preview and does not publish a general self-service deployment API or credentials flow. This repository therefore does **not** claim local turns are Cloud-hosted. Arena eligibility still requires SharedOS to provision the preview environment and the final deployment to move the bounded turns to that managed boundary. The policy, tool, resource, grant, and audit contracts here are already the official portable contracts; the Cloud transport must be wired from the provisioning details SharedOS supplies. Production deployment should fail its eligibility review until that provisioning is complete. See [SharedOS Cloud](https://www.sharedos.ai/cloud).
+SharedOS Cloud currently provisions a project and environment key for its managed audit read side. When `SHAREDOS_KEY` is configured, Witness sends each trial's official SDK audit events as one bounded batch to `https://www.sharedos.ai/v1/audit/events` after the signed docket has been persisted. The local SQLite record remains authoritative, export status is durable, and a Cloud outage cannot widen authority or erase the docket.
 
-This is the real platform limitation called out by the brief's blocked-capability rule. No fake Cloud adapter is included.
+The current Cloud product explicitly keeps the kernel decision in the host process; only decision events reach the Cloud console. Witness therefore does **not** claim that the present preview remotely executes agent turns. This is the closest legitimate supported integration under the brief's blocked-capability rule, and no fake Cloud turn adapter is included. See [SharedOS Cloud](https://www.sharedos.ai/cloud) and the [host integration guide](https://www.sharedos.ai/docs/host-integration).
 
 ## Identities and grant map
 
@@ -128,6 +128,14 @@ When they are absent, Witness generates a development keypair and persists it in
 
 Node 24's built-in SQLite stores dockets, artifacts, grants, bounded grant usage, audit events, aggregate authority state, signatures, and development keys at `data/witness.sqlite`. WAL mode and a busy timeout support concurrent local callers. Set `WITNESS_DB_PATH` to choose another durable path.
 
+Cloud audit export status is stored per trace in `cloud_audit_exports` and is returned by `GET /api/v1/audit?docketId=wkt_...` under `cloud`.
+
+Retry a failed export without rerunning the seller:
+
+```bash
+npm run sharedos:sync -- wkt_<docket-id>
+```
+
 ## Local setup
 
 Requires Node 24 or newer because persistence uses the built-in `node:sqlite` module.
@@ -154,9 +162,9 @@ The three deterministic local sellers are dispatched in-process by the trial eng
 1. Provision a durable writable SQLite volume or replace the small `WitnessStore` port with the deployment's supported persistent store.
 2. supply persistent Ed25519 keys.
 3. retain Node runtime semantics for DNS resolution and the SSRF boundary.
-4. provision SharedOS Cloud preview access with the platform team.
-5. bind the official Cloud transport to the same trusted grant source, tools, resources, purpose, identities, and audit sink.
-6. confirm the final deployment's required agent turns appear in Cloud audit before declaring Arena eligibility.
+4. create a SharedOS Cloud project and configure its environment key as `SHAREDOS_KEY`.
+5. confirm each final deployment trial reports `cloud.status = "synced"` and appears in the Cloud decisions console.
+6. keep the embedded official kernel as the decision boundary; the current Cloud preview is the audit read side, not a remote turn executor.
 7. run the full test, lint, build, malicious URL, timeout, restart, and concurrent-caller checks.
 
 The application needs no user accounts, scheduled work, generic chat, or human action after Arena starts.

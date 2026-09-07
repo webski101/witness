@@ -12,7 +12,8 @@
     "start": "next start -H 127.0.0.1 -p 43147",
     "lint": "eslint",
     "test": "tsx --test lib/kernel/kernel.test.ts lib/witness/trial.test.ts",
-    "sharedos:proof": "tsx scripts/sharedos-proof.ts"
+    "sharedos:proof": "tsx scripts/sharedos-proof.ts",
+    "sharedos:sync": "node --env-file=.env.local --import tsx scripts/sync-cloud-audit.ts"
   },
   "dependencies": {
     "@aicoo/sharedos": "0.1.0-alpha.4",

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { CLAIM_KINDS } from "./types";
 
-const ClaimSchema = z.object({
+export const ClaimSchema = z.object({
   id: z.string().trim().min(1).max(80),
   kind: z.enum(CLAIM_KINDS),
   statement: z.string().trim().min(1).max(500),

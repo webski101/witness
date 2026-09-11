@@ -8,6 +8,15 @@ export const listing = {
   purpose: PURPOSE,
   sla: { maximum: "5 minutes", typical: "under 20 seconds" },
   call: { method: "POST", path: "/api/v1/trial", contentType: "application/json" },
+  mcp: {
+    protocol: "Model Context Protocol",
+    transport: "streamable-http",
+    endpoint: "/api/mcp",
+    tools: [
+      { name: "probe", priceCredits: 8, claims: "exactly 1" },
+      { name: "docket", priceCredits: 15, claims: "2 or more" },
+    ],
+  },
   services: [
     { name: "probe", priceCredits: 8, claims: "exactly 1" },
     { name: "docket", priceCredits: 15, claims: "2 or more" },

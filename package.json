@@ -11,15 +11,17 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 43147",
     "lint": "eslint",
-    "test": "tsx --test lib/kernel/kernel.test.ts lib/witness/trial.test.ts",
+    "test": "tsx --test lib/kernel/kernel.test.ts lib/witness/trial.test.ts lib/witness/mcp.test.ts",
     "db:generate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate",
     "sharedos:proof": "tsx scripts/sharedos-proof.ts",
-    "sharedos:sync": "node --env-file=.env.local --import tsx scripts/sync-cloud-audit.ts"
+    "sharedos:sync": "node --env-file=.env.local --import tsx scripts/sync-cloud-audit.ts",
+    "mcp:verify": "tsx scripts/verify-live-mcp.ts"
   },
   "dependencies": {
     "@aicoo/sharedos": "0.1.0-alpha.4",
     "@base-ui/react": "^1.8.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@vercel/functions": "^3.9.5",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
@@ -34,6 +36,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.23.1",

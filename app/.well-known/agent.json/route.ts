@@ -9,6 +9,7 @@ export async function GET() {
     purpose: listing.purpose,
     services: listing.services,
     endpoint: listing.call,
+    mcp: listing.mcp,
     inputSchema: listing.inputSchema,
     outputSchema: listing.outputSchema,
     identities: listing.agentIdentities,

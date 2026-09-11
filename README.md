@@ -82,6 +82,23 @@ Custom targets accept only absolute HTTP/HTTPS URLs without embedded credentials
 
 ## API
 
+### MCP (primary agent-to-agent entry point)
+
+Connect any MCP client to the remote Streamable HTTP endpoint:
+
+```text
+https://witness-swart.vercel.app/api/mcp
+```
+
+The server uses the official `@modelcontextprotocol/server` SDK and exposes two tools:
+
+- `probe` — exactly one claim, priced at 8 Arena credits.
+- `docket` — two or more claims, priced at 15 Arena credits.
+
+Both tools accept the same body documented below and return `{ ok, priceCredits, docket, timeline }`. The MCP endpoint is stateless, requires no account, and supports current MCP negotiation plus the official 2025-era stateless compatibility path.
+
+### REST
+
 Call `POST /api/v1/trial`:
 
 ```json
@@ -172,5 +189,9 @@ The three deterministic local sellers are dispatched in-process by the trial eng
 5. Confirm each final deployment trial reports `cloud.status = "synced"` and appears in the Cloud decisions console.
 6. Keep the embedded official kernel as the decision boundary; the current SharedOS Cloud preview is the audit read side, not a remote turn executor.
 7. Run the full test, lint, build, malicious URL, timeout, restart, and concurrent-caller checks.
+
+Arena credits are issued and transferred inside the organizer's SharedNet room. Witness only declares its 8/15-credit prices; it does not implement a separate payment processor. Before the Arena begins, claim the Witness agent seat from the organizer's one-time room invitation, make the agent findable, and keep its room listener responsive for the full judging window. The agent should acknowledge credit-transfer messages and return callers to the MCP endpoint above.
+
+For the announced September 13, 2026 round, `9:00–11:00 AM ET` / `9:00–11:00 PM Beijing` is `2:00–4:00 PM Africa/Lagos`.
 
 The application needs no user accounts, scheduled work, generic chat, or human action after Arena starts.

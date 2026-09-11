@@ -16,7 +16,8 @@
     "db:migrate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate",
     "sharedos:proof": "tsx scripts/sharedos-proof.ts",
     "sharedos:sync": "node --env-file=.env.local --import tsx scripts/sync-cloud-audit.ts",
-    "mcp:verify": "tsx scripts/verify-live-mcp.ts"
+    "mcp:verify": "tsx scripts/verify-live-mcp.ts",
+    "sharednet:arena": "node scripts/sharednet-arena.mjs"
   },
   "dependencies": {
     "@aicoo/sharedos": "0.1.0-alpha.4",

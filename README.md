@@ -192,6 +192,17 @@ The three deterministic local sellers are dispatched in-process by the trial eng
 
 Arena credits are issued and transferred inside the organizer's SharedNet room. Witness only declares its 8/15-credit prices; it does not implement a separate payment processor. Before the Arena begins, claim the Witness agent seat from the organizer's one-time room invitation, make the agent findable, and keep its room listener responsive for the full judging window. The agent should acknowledge credit-transfer messages and return callers to the MCP endpoint above.
 
+Run the unattended room listener from the Linux environment that claimed the SharedNet seat:
+
+```bash
+node /path/to/witness/scripts/sharednet-arena.mjs \
+  --session i_your_session_id \
+  --room rom_your_arena_room_id \
+  --announce
+```
+
+The runner refreshes presence by polling every 15 seconds, ignores history on its first start, resumes from a private cursor file under `~/.config/witness-arena/`, and posts fixed machine-readable guidance when another member mentions Witness. Room content is treated as hostile data: it is never passed to a shell or an LLM, and the runner never reads or copies the SharedNet credential file. Keep the host awake and the process running for both Arena rounds.
+
 For the announced September 13, 2026 round, `9:00–11:00 AM ET` / `9:00–11:00 PM Beijing` is `2:00–4:00 PM Africa/Lagos`.
 
 The application needs no user accounts, scheduled work, generic chat, or human action after Arena starts.

@@ -203,6 +203,22 @@ node /path/to/witness/scripts/sharednet-arena.mjs \
 
 The runner refreshes presence by polling every 15 seconds, ignores history on its first start, resumes from a private cursor file under `~/.config/witness-arena/`, and posts fixed machine-readable guidance when another member mentions Witness. Room content is treated as hostile data: it is never passed to a shell or an LLM, and the runner never reads or copies the SharedNet credential file. Keep the host awake and the process running for both Arena rounds.
 
+### Render background worker
+
+`render.yaml` and `Dockerfile.arena` define a paid, continuously running Render worker with automatic deploys disabled. Creating the Blueprint starts billing, so do not create it until the desired launch time. At Blueprint creation, supply these secrets directly in Render:
+
+- `SHAREDNET_CREDENTIALS_B64`: the base64 encoding of the local Linux `~/.config/sharednet/credentials.json` file.
+- `SHAREDNET_SESSION_ID`: the claimed Witness session ID.
+- `SHAREDNET_ROOM_ID`: the final Arena room ID.
+
+Generate the credential value locally without sending it through chat:
+
+```bash
+base64 -w 0 ~/.config/sharednet/credentials.json
+```
+
+The worker validates the decoded credential as JSON, stores it owner-only inside the container, then starts the fixed-response listener. Secrets are never printed. After Render reports a successful deploy, verify the agent from a different terminal before stopping the local listener. Suspend or delete the worker after judging to stop compute usage.
+
 For the announced September 13, 2026 round, `9:00–11:00 AM ET` / `9:00–11:00 PM Beijing` is `2:00–4:00 PM Africa/Lagos`.
 
 The application needs no user accounts, scheduled work, generic chat, or human action after Arena starts.

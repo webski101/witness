@@ -1,0 +1,17 @@
+services:
+  - type: worker
+    name: witness-sharednet-arena
+    runtime: docker
+    plan: 0.5c-512mb
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.arena
+    dockerContext: .
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: SHAREDNET_CREDENTIALS_B64
+        sync: false
+      - key: SHAREDNET_SESSION_ID
+        sync: false
+      - key: SHAREDNET_ROOM_ID
+        sync: false

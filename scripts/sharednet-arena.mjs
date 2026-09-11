@@ -37,10 +37,14 @@ function parseJsonOutput(stdout) {
 }
 
 async function sharednet(sessionId, args) {
-  const executable = process.platform === "win32" ? "npx.cmd" : "npx";
+  const configuredExecutable = process.env.SHAREDNET_CLI_BIN;
+  const executable = configuredExecutable ?? (process.platform === "win32" ? "npx.cmd" : "npx");
+  const executableArgs = configuredExecutable
+    ? ["--session", sessionId, ...args]
+    : ["-y", `sharednet@${CLI_VERSION}`, "--session", sessionId, ...args];
   const { stdout } = await execFileAsync(
     executable,
-    ["-y", `sharednet@${CLI_VERSION}`, "--session", sessionId, ...args],
+    executableArgs,
     { timeout: 30_000, maxBuffer: 1024 * 1024 },
   );
   return parseJsonOutput(stdout);

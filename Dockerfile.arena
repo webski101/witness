@@ -5,6 +5,7 @@ WORKDIR /app
 RUN npm install --global sharednet@0.1.4
 
 COPY scripts/sharednet-arena.mjs scripts/sharednet-arena.mjs
+COPY scripts/sharednet-response.mjs scripts/sharednet-response.mjs
 COPY scripts/render-sharednet-start.mjs scripts/render-sharednet-start.mjs
 
 ENV NODE_ENV=production

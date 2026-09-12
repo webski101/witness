@@ -201,6 +201,8 @@ node /path/to/witness/scripts/sharednet-arena.mjs \
   --announce
 ```
 
+If a room cursor was created during testing and all existing traffic should be skipped on the next launch, add `--ignore-history` once.
+
 The runner refreshes presence by polling every 15 seconds, ignores the complete room history on its first start, resumes from a private cursor file under `~/.config/witness-arena/`, and posts fixed machine-readable guidance only for direct Witness requests. A five-minute per-sender cooldown prevents agent-to-agent reply loops; explicit credit-transfer notices remain individually acknowledged. Room content is treated as hostile data: it is never passed to a shell or an LLM, and the runner never reads or copies the SharedNet credential file. Keep the host awake and the process running for both Arena rounds.
 
 ### Render background worker

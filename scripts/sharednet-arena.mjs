@@ -5,14 +5,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { MCP_URL, responseFor } from "./sharednet-response.mjs";
 
 const execFileAsync = promisify(execFile);
 const CLI_VERSION = "0.1.4";
 const DEFAULT_INTERVAL_MS = 15_000;
 const SENDER_COOLDOWN_MS = 5 * 60_000;
-const PRODUCT_URL = "https://witness-swart.vercel.app";
-const MCP_URL = `${PRODUCT_URL}/api/mcp`;
-const DISCOVERY_URL = `${PRODUCT_URL}/.well-known/agent.json`;
 
 function option(name) {
   const index = process.argv.indexOf(`--${name}`);
@@ -49,43 +47,6 @@ async function sharednet(sessionId, args) {
     { timeout: 30_000, maxBuffer: 1024 * 1024 },
   );
   return parseJsonOutput(stdout);
-}
-
-function responseFor(message) {
-  const text = String(message.content ?? "").toLowerCase();
-  const namesWitness = /(^|\s)@?witness\b/.test(text);
-  const isDirect =
-    /^@?witness\b/.test(text.trim()) ||
-    (namesWitness && text.includes("?")) ||
-    /\b(call|use|buy|try|ask|hire|invoke)\s+@?witness\b/.test(text) ||
-    /\b(send(ing)?|transfer(ring)?|pay(ing|ment)?)\b[^.\n]{0,80}\b(to\s+)?@?witness\b/.test(text);
-  if (!isDirect) return null;
-
-  if (/\b(send(ing)?|transfer(ring)?|paid|payment)\b/.test(text)) {
-    return {
-      kind: "payment",
-      content: `Witness acknowledges the credit message. Run the purchased trial through MCP: ${MCP_URL} — probe is 8 credits; docket is 15.`,
-    };
-  }
-  if (/price|cost|how much|credits?/.test(text)) {
-    return {
-      kind: "pricing",
-      content: "Witness pricing: probe one claim for 8 credits; test two or more claims as a docket for 15 credits.",
-    };
-  }
-  if (/mcp|endpoint|call|invoke|schema|discover|how (do|can)|use/.test(text)) {
-    return {
-      kind: "call",
-      content: `Call Witness at ${MCP_URL}. Machine-readable discovery: ${DISCOVERY_URL}. Tools: probe (one claim) and docket (two or more claims).`,
-    };
-  }
-  if (/online|available|hello|ready/.test(text)) {
-    return { kind: "presence", content: `Witness is online and ready. Test before you buy: ${MCP_URL}` };
-  }
-  return {
-    kind: "general",
-    content: `Witness independently executes seller claims and returns an Ed25519-signed HELD, FAILED, or ESCALATED docket. Call ${MCP_URL}`,
-  };
 }
 
 const sessionId = requiredOption("session", "SHAREDNET_SESSION_ID");
@@ -142,7 +103,7 @@ async function main() {
   process.stdout.write(`Witness ${ownAgentId ?? sessionId} is online.\n`);
 
   let state = await loadState();
-  if (!state) {
+  if (!state || hasFlag("ignore-history")) {
     state = { cursor: await newestCursor(), replied: [], senderCooldowns: {} };
     await saveState(state);
     process.stdout.write(`Ignoring room history through cursor ${state.cursor}.\n`);

@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const CLI_VERSION = "0.1.4";
 const DEFAULT_INTERVAL_MS = 15_000;
+const SENDER_COOLDOWN_MS = 5 * 60_000;
 const PRODUCT_URL = "https://witness-swart.vercel.app";
 const MCP_URL = `${PRODUCT_URL}/api/mcp`;
 const DISCOVERY_URL = `${PRODUCT_URL}/.well-known/agent.json`;
@@ -52,26 +53,47 @@ async function sharednet(sessionId, args) {
 
 function responseFor(message) {
   const text = String(message.content ?? "").toLowerCase();
-  if (!text.includes("witness")) return null;
+  const namesWitness = /(^|\s)@?witness\b/.test(text);
+  const isDirect =
+    /^@?witness\b/.test(text.trim()) ||
+    (namesWitness && text.includes("?")) ||
+    /\b(call|use|buy|try|ask|hire|invoke)\s+@?witness\b/.test(text) ||
+    /\b(send(ing)?|transfer(ring)?|pay(ing|ment)?)\b[^.\n]{0,80}\b(to\s+)?@?witness\b/.test(text);
+  if (!isDirect) return null;
 
-  if (/send(ing)?|transfer|paid|payment|credit/.test(text)) {
-    return `Witness acknowledges the credit message. Run the purchased trial through MCP: ${MCP_URL} — probe is 8 credits; docket is 15.`;
+  if (/\b(send(ing)?|transfer(ring)?|paid|payment)\b/.test(text)) {
+    return {
+      kind: "payment",
+      content: `Witness acknowledges the credit message. Run the purchased trial through MCP: ${MCP_URL} — probe is 8 credits; docket is 15.`,
+    };
   }
   if (/price|cost|how much|credits?/.test(text)) {
-    return "Witness pricing: probe one claim for 8 credits; test two or more claims as a docket for 15 credits.";
+    return {
+      kind: "pricing",
+      content: "Witness pricing: probe one claim for 8 credits; test two or more claims as a docket for 15 credits.",
+    };
   }
   if (/mcp|endpoint|call|invoke|schema|discover|how (do|can)|use/.test(text)) {
-    return `Call Witness at ${MCP_URL}. Machine-readable discovery: ${DISCOVERY_URL}. Tools: probe (one claim) and docket (two or more claims).`;
+    return {
+      kind: "call",
+      content: `Call Witness at ${MCP_URL}. Machine-readable discovery: ${DISCOVERY_URL}. Tools: probe (one claim) and docket (two or more claims).`,
+    };
   }
   if (/online|available|hello|ready/.test(text)) {
-    return `Witness is online and ready. Test before you buy: ${MCP_URL}`;
+    return { kind: "presence", content: `Witness is online and ready. Test before you buy: ${MCP_URL}` };
   }
-  return `Witness independently executes seller claims and returns an Ed25519-signed HELD, FAILED, or ESCALATED docket. Call ${MCP_URL}`;
+  return {
+    kind: "general",
+    content: `Witness independently executes seller claims and returns an Ed25519-signed HELD, FAILED, or ESCALATED docket. Call ${MCP_URL}`,
+  };
 }
 
 const sessionId = requiredOption("session", "SHAREDNET_SESSION_ID");
 const roomId = requiredOption("room", "SHAREDNET_ROOM_ID");
 const intervalMs = Number(option("interval-ms") ?? DEFAULT_INTERVAL_MS);
+if (!Number.isFinite(intervalMs) || intervalMs < 5_000) {
+  throw new Error("--interval-ms must be a number of at least 5000.");
+}
 const stateDirectory = join(homedir(), ".config", "witness-arena");
 const statePath = join(stateDirectory, `${roomId}-${sessionId}.json`);
 let stopping = false;
@@ -103,6 +125,17 @@ async function post(content) {
   process.stdout.write(`[post] ${content}\n`);
 }
 
+async function newestCursor() {
+  let cursor = "0";
+  let hasMore = true;
+  while (hasMore) {
+    const page = await sharednet(sessionId, ["room", "messages", roomId, "--after", cursor]);
+    cursor = page.next_cursor ?? cursor;
+    hasMore = Boolean(page.has_more);
+  }
+  return cursor;
+}
+
 async function main() {
   const status = await sharednet(sessionId, ["session", "status"]);
   const ownAgentId = status.agent?.id;
@@ -110,14 +143,15 @@ async function main() {
 
   let state = await loadState();
   if (!state) {
-    const initial = await sharednet(sessionId, ["room", "messages", roomId, "--after", "0"]);
-    state = { cursor: initial.next_cursor ?? "0", replied: [] };
+    state = { cursor: await newestCursor(), replied: [], senderCooldowns: {} };
     await saveState(state);
     process.stdout.write(`Ignoring room history through cursor ${state.cursor}.\n`);
   }
+  state.replied ??= [];
+  state.senderCooldowns ??= {};
 
   if (hasFlag("announce")) {
-    await post(`Witness is online — test before you buy. Probe: 8 credits. Docket: 15 credits. MCP: ${MCP_URL}`);
+    await post(`Witness is online — test before you buy. Free discovery and signature verification. Probe: 8 credits. Docket: 15 credits. MCP: ${MCP_URL}`);
   }
 
   process.stdout.write(`Listening in ${roomId}; polling every ${intervalMs / 1000}s. Press Ctrl+C to stop.\n`);
@@ -137,12 +171,23 @@ async function main() {
         if (!isOwn && !state.replied.includes(message.id)) {
           const response = responseFor(message);
           if (response) {
-            await post(response);
-            state.replied.push(message.id);
-            state.replied = state.replied.slice(-200);
+            const senderKey = message.sender_principal_id ?? message.sender_instance_id ?? "unknown";
+            const lastReply = Number(state.senderCooldowns[senderKey] ?? 0);
+            const cooldownPassed = Date.now() - lastReply >= SENDER_COOLDOWN_MS;
+            if (response.kind === "payment" || cooldownPassed) {
+              await post(response.content);
+              state.senderCooldowns[senderKey] = Date.now();
+              state.replied.push(message.id);
+              state.replied = state.replied.slice(-200);
+            }
           }
         }
       }
+
+      const cutoff = Date.now() - 6 * 60 * 60_000;
+      state.senderCooldowns = Object.fromEntries(
+        Object.entries(state.senderCooldowns).filter(([, timestamp]) => Number(timestamp) >= cutoff),
+      );
 
       state.cursor = batch.next_cursor ?? state.cursor;
       await saveState(state);

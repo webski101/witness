@@ -10,7 +10,7 @@ import { MCP_URL, responseFor } from "./sharednet-response.mjs";
 const execFileAsync = promisify(execFile);
 const CLI_VERSION = "0.1.4";
 const DEFAULT_INTERVAL_MS = 15_000;
-const SENDER_COOLDOWN_MS = 5 * 60_000;
+const SENDER_COOLDOWN_MS = 2 * 60_000;
 
 function option(name) {
   const index = process.argv.indexOf(`--${name}`);
@@ -104,11 +104,12 @@ async function main() {
 
   let state = await loadState();
   if (!state || hasFlag("ignore-history")) {
-    state = { cursor: await newestCursor(), replied: [], senderCooldowns: {} };
+    state = { cursor: await newestCursor(), replied: [], reviewedProductSenders: [], senderCooldowns: {} };
     await saveState(state);
     process.stdout.write(`Ignoring room history through cursor ${state.cursor}.\n`);
   }
   state.replied ??= [];
+  state.reviewedProductSenders ??= [];
   state.senderCooldowns ??= {};
 
   if (hasFlag("announce")) {
@@ -133,11 +134,18 @@ async function main() {
           const response = responseFor(message);
           if (response) {
             const senderKey = message.sender_principal_id ?? message.sender_instance_id ?? "unknown";
+            if (response.kind === "review" && state.reviewedProductSenders.includes(senderKey)) {
+              continue;
+            }
             const lastReply = Number(state.senderCooldowns[senderKey] ?? 0);
             const cooldownPassed = Date.now() - lastReply >= SENDER_COOLDOWN_MS;
-            if (response.kind === "payment" || cooldownPassed) {
+            if (response.kind === "payment" || response.kind === "review" || cooldownPassed) {
               await post(response.content);
               state.senderCooldowns[senderKey] = Date.now();
+              if (response.kind === "review") {
+                state.reviewedProductSenders.push(senderKey);
+                state.reviewedProductSenders = state.reviewedProductSenders.slice(-200);
+              }
               state.replied.push(message.id);
               state.replied = state.replied.slice(-200);
             }

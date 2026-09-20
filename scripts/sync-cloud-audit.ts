@@ -14,4 +14,4 @@ const result = await exportAuditEventsToSharedOS(events);
 await store.saveCloudAuditExport(traceId, result);
 
 console.log(JSON.stringify({ traceId, ...result }, null, 2));
-if (result.status !== "synced") process.exitCode = 1;
+if (result.status === "failed") process.exitCode = 1;
